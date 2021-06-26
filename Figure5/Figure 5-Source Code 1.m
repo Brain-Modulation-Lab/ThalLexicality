@@ -1,73 +1,67 @@
-% Source code used to generate Figure 5a
+% Source code used to generate Figure 6a
+
+% Add shadedErrorBar.m to path
 
 % sampling frequency
 fs = 1000;
 
-% load in trial-level LFP data of the recording
-load('/Users/dengyu/Dropbox (Brain Modulation Lab)/Dengyu/Thal_lexicality_paper/CodeandDataAvailability/Figure5/Figure 5-Source Data 1.mat', 'z_oi');
-% load in timing info of the trials
-load('/Users/dengyu/Dropbox (Brain Modulation Lab)/Dengyu/Thal_lexicality_paper/CodeandDataAvailability/Figure5/Figure 5-Source Data 1.mat', 'epoch_oi');
-% load in trial order according to reaction time
-load('/Users/dengyu/Dropbox (Brain Modulation Lab)/Dengyu/Thal_lexicality_paper/CodeandDataAvailability/Figure5/Figure 5-Source Data 1.mat', 'ephy_timing');
+% load in word trials, nonword trials, and their respective timing data
+load('/Users/dengyu/Dropbox (Brain Modulation Lab)/Dengyu/Thal_lexicality_paper/CodeandDataAvailability/Figure5/Figure 5-Source Data 1.mat');
 
-% sort z_oi and epoch_oi according to the trialorder stored in ephy_timing
-st_z = z_oi(ephy_timing.TrialOrder); % each trial is 2s precue to 2s post speech offset
-st_epoch = epoch_oi(ephy_timing.TrialOrder,:);
+% get each time points' mean value and se
+word_mean = mean(word_trials); word_std = std(word_trials); word_se = word_std./sqrt(size(word_trials,1));
 
-% delete trials whose ActOn is missing (because trial_oi not activated)
-tr2del = find(isnan(ephy_timing.ActOn)); 
+nonword_mean = mean(nonword_trials); nonword_std = std(nonword_trials); nonword_se = nonword_std./sqrt(size(nonword_trials,1));
 
-st_z(tr2del) = [];
-st_epoch(tr2del,:) = [];
-ephy_timing(tr2del,:) = [];
+% down-sample for plotting
+word_mean_d = resample(word_mean,4,1000); word_se_d = resample(word_se,4,1000);
 
-% smooth
-st_z_smooth = cellfun(@(x) smooth(x',200)',st_z,'UniformOutput',0);
+nonword_mean_d = resample(nonword_mean,4,1000); nonword_se_d = resample(nonword_se,4,1000);
 
-%baseline (which is 1s pre-cue)
-Bt = cellfun(@(x) x(1001:2000), st_z_smooth, 'UniformOutput',0);
+% time axis
+Tline = -1:0.25:3;
 
-% normalize to baseline
-zz = cellfun(@(x,y) (x-mean(y))./std(y), st_z_smooth, Bt,'UniformOutput',0);
+% plot
+figure; hold on;
 
-% define region to be plotted
-roi_starts = num2cell((st_epoch.stimulus_starts - st_epoch.starts - 0.5) * fs)'; % 0.5s precue
+hold on; word_line = shadedErrorBar(Tline,word_mean_d,word_se_d,'lineprops','-blue','patchSaturation',0.1);
+word_line.edge(1).Visible = 'off';word_line.edge(2).Visible = 'off';
+word_line.mainLine.LineWidth = 2; word_line.mainLine.Color =[0.2,0.4,0.9];word_line.patch.FaceColor =  [0.2,0.4,0.9];
 
-% default roi_ends is 3s post cue, but if the min length of trials
-% is less than 5s, then use the shortest trial length as common
-% length
-if min(cell2mat(cellfun(@length, zz, 'UniformOutput',0))) < 5000 %  
-   length_used = floor(min(cell2mat(cellfun(@length, zz, 'UniformOutput',0)))/100) * 100;
+hold on; nonword_line = shadedErrorBar(Tline,nonword_mean_d,nonword_se_d,'lineprops','-r','patchSaturation',0.1);
+nonword_line.edge(1).Visible = 'off';nonword_line.edge(2).Visible = 'off';
+nonword_line.mainLine.LineWidth = 2; nonword_line.mainLine.Color =[1,0,0];nonword_line.patch.FaceColor = [1,0,0];
 
-   roi_ends = num2cell(repmat(length_used,[1 length(zz)]));
+% set figure parameters
+h_ax = gca;
+ylim([-8 4])
+set(h_ax,'XTick',-1:0.5:3);
+set(h_ax,'box','on');
+set(h_ax,'TickLength',[0.005,0.005]);
+xlabel(h_ax,'Time relative to stimulus presentation (s)');
+ylabel(h_ax,'z-scored beta power');
 
-else
-   roi_ends = num2cell((st_epoch.stimulus_starts - st_epoch.starts + 3) * fs)';
-end
+% plot timing lines
+hold on;
 
-% prepare data to be plotted
-zz_crop = cellfun(@(x,y,z) z(x:y), roi_starts, roi_ends, zz,'UniformOutput',0);
-plot_mat = cell2mat(zz_crop');
+% timing lines for word
+sponmean = mean(word_trials_timing.onset_word - word_trials_timing.stimulus_starts);
+spoffMean = mean(word_trials_timing.offset_word - word_trials_timing.stimulus_starts);
+word_spon_line = plot([sponmean,sponmean], ylim);
+word_spon_line.Color = [0.2,0.4,0.9];
+word_spon_line.LineStyle = '--';    
 
-% time points
-tp = linspace(-0.5, length(plot_mat)/1000 -0.5 - 0.001, length(plot_mat));
+word_spoff_line = plot([spoffMean,spoffMean], ylim);
+word_spoff_line.Color = [0.2,0.4,0.9];
+word_spoff_line.LineStyle = '--';
 
-%plot
-imagesc(tp,1:size(plot_mat,1),plot_mat); set(gca, 'YDir', 'Normal');
+% timing lines for nonword
+sponmean = mean(nonword_trials_timing.onset_word - nonword_trials_timing.stimulus_starts);
+spoffMean = mean(nonword_trials_timing.offset_word - nonword_trials_timing.stimulus_starts);
+nonword_spon_line = plot([sponmean,sponmean], ylim);
+nonword_spon_line.Color = [1,0,0];
+nonword_spon_line.LineStyle = '--';
 
-% set some plotting parameters
-hold on; time_spon =plot(ephy_timing.ReactionT,(1:length(ephy_timing.ReactionT)),'-k','LineWidth',3);
-hold on; time_cue = plot([0,0],ylim,'k--');
-hold on; plot(ephy_timing.ActOn,(1:length(ephy_timing.ActOn)),'r*','MarkerSize',5); % red for beta
-
-hh = gca;
-set(hh,'box','on');
-set(hh,'TickLength',[0.005,0.005]);
-set(hh,'XTickLabel',-0.5:0.5:3);
-colormap parula; caxis([-6,6]);
-pcolorbar = colorbar;
-set(pcolorbar,'TickLength',0.005);
-pcolorbar.Label.String = "z-scored power";
-
-xlabel("Time relative to stimulus presentation (s)");
-ylabel("Trial number");
+nonword_spoff_line = plot([spoffMean,spoffMean], ylim);
+nonword_spoff_line.Color = [1,0,0];
+nonword_spoff_line.LineStyle = '--';
